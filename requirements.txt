@@ -1,4 +1,4 @@
 streamlit
-equests
+requests
 xml
 bs4 
