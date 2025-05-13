@@ -99,7 +99,6 @@ def main():
 
     if submit_cred:
         streamlit.session_state.username = username_input
-        streamlit.write("Please enter a title to search.")
         streamlit.session_state.password = password_input
         streamlit.success("Credentials saved!")
 
@@ -170,7 +169,7 @@ def main():
                                 streamlit.download_button(
                                     label=f"📥 Download PDF",
                                     data=pdf_response.content,
-                                    file_name=f"{paper['year']}{paper['month']}.pdf",
+                                    file_name=f"{paper['title']} - {paper['year']}{paper['month']}.pdf",
                                     mime="application/pdf",
                                     key=f"download_{pdf_url}"
                                 )
