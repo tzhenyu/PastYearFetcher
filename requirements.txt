@@ -2,4 +2,3 @@ streamlit
 requests
 xml
 beautifulsoup4
-beautifulsoup4
