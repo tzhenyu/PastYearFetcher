@@ -70,7 +70,7 @@ def search_paper(past_year_title, selected_faculty):
 def main():
     streamlit.title("TAR UMT's Past Years Fetcher")
     streamlit.markdown("Made by [@tzhenyu](https://github.com/tzhenyu)")
-    streamlit.markdown("This project does not store any of your credentials. You may check the source code [here]()")
+    streamlit.markdown("This project does not store any of your credentials. You may check the source code [here](https://github.com/tzhenyu/PastYearFetcher/blob/main/pastyearfetcher.py)")
     streamlit.markdown("This is a personal project and is not affiliated with TAR UMT in any way. Use at your own risk.")
     
     if "clear_on_next_run" in streamlit.session_state and streamlit.session_state.clear_on_next_run:
