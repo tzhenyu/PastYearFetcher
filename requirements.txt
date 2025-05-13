@@ -1,4 +1,4 @@
 streamlit
 requests
 xml
-bs4 
+beautifulsoup4
