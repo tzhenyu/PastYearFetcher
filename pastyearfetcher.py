@@ -128,15 +128,13 @@ def main():
     if results:
         st.write(f"{len(results)} result(s) found!")
         for idx, paper in enumerate(results):
-            col1, col2, col3, col4 = st.columns([1, 2, 1, 2])
+            col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
-                st.write(f"{paper['year']}")
+                st.write(f"{paper['year']} - {paper['month']}")
             with col2:
-                st.write(f"{paper['month']}")
-            with col3:
                 abbrs = [faculty_abbr.get(f, f) for f in paper['faculties']]
                 st.write(f"{', '.join(abbrs)}")
-            with col4:
+            with col3:
                 # Fetch the PDF download link from the paper page
                 # Create a unique key for this paper's PDF in session state
                 paper_key = f"pdf_{hashlib.md5(paper['link'].encode()).hexdigest()}"
