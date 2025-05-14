@@ -58,7 +58,6 @@ def search_paper(past_year_title, selected_faculty):
 def main():
     st.title("TAR UMT's Past Years Fetcher")
     st.markdown("Made by [@tzhenyu](https://github.com/tzhenyu)")
-    st.markdown("This project does not store any of your credentials. You may check the source code [here](https://github.com/tzhenyu/PastYearFetcher/blob/main/pastyearfetcher.py)")
     st.markdown("This is a personal project and is not affiliated with TAR UMT in any way. Use at your own risk.")
 
     # --- Session State Initialization ---
@@ -75,7 +74,7 @@ def main():
             st.session_state[key] = default
 
     # --- Credentials Box ---
-    with st.expander("Please put your TAR UMT credentials to download the PDF files.", expanded=True):
+    with st.expander("Please put your TAR UMT credentials. We do not store your credentials.", expanded=True):
         username_input = st.text_input("Username", key="eprints_username")
         password_input = st.text_input("Password", type="password", key="eprints_password")
         submit_cred = st.button("Submit Credentials")
