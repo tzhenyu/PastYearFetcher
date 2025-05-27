@@ -55,10 +55,131 @@ def search_paper(past_year_title, selected_faculty):
             continue
     return results
 
-def main():
-    st.title("TAR UMT's Past Years Fetcher")
-    st.markdown("Made by [@tzhenyu](https://github.com/tzhenyu)")
+def handle_credentials():
+    """Handle the credentials input and storage in session state."""
+    with st.expander("Please put your TAR UMT credentials.", expanded=True):
+        username_input = st.text_input("Username", key="eprints_username")
+        password_input = st.text_input("Password", type="password", key="eprints_password")
+        submit_cred = st.button("Submit")
+        if submit_cred:
+            st.session_state.username = username_input
+            st.session_state.password = password_input
+            st.session_state.cred_saved = True
+            st.success("Credentials saved!")
+    return st.session_state.username, st.session_state.password
+def handle_pdf_actions(col, paper, username, password):
+    """Handle PDF fetch and download actions for a paper."""
+    with col:
+        paper_key = f"pdf_{hashlib.md5(paper['link'].encode()).hexdigest()}"
+        
+        if paper_key not in st.session_state:
+            # Fetch PDF content immediately
+            response = requests.get(paper['link'])
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, "html.parser")
+                meta_tags = soup.find_all("meta", attrs={"name": "eprints.document_url"})
+                for tag in meta_tags:
+                    if tag.has_attr("content"):
+                        pdf_url = tag['content'] + "?download=1"
+                        pdf_response = requests.get(pdf_url, auth=HTTPBasicAuth(username, password))
+                        if pdf_response.status_code == 200:
+                            filename = f"{paper['title']}_{paper['year']}_{paper['month']}.pdf"
+                            filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.'))
+                            
+                            # Add Content-Disposition header to force download
+                            headers = {
+                                'Content-Type': 'application/pdf',
+                                'Content-Disposition': f'attachment; filename="{filename}"'
+                            }
+                            
+                            st.session_state[paper_key] = {
+                                'content': pdf_response.content,
+                                'filename': filename,
+                                'headers': headers,
+                                'status': 'success'
+                            }
+                            break
+                        elif pdf_response.status_code == 401:
+                            st.session_state[paper_key] = {'status': 'unauthorized'}
+                            break
+            else:
+                st.session_state[paper_key] = {'status': 'not_found'}
+        
+        # Show appropriate button/message based on status
+        if paper_key in st.session_state:
+            data = st.session_state[paper_key]
+            if data.get('status') == 'success':
+                st.download_button(
+                    label="Get",
+                    data=data['content'],
+                    file_name=data['filename'],
+                    mime="application/pdf",
+                    key=f"download_{paper_key}",
+                    help=f"Download {data['filename']}",
+                    use_container_width=True,
+                
+                )
+
+            elif data.get('status') == 'unauthorized':
+                st.error("Invalid password or username")
+            else:
+                st.warning("⚠️")
+
+@st.dialog("Welcome!")
+def disclaimer_dialog():
     st.markdown("This is a personal project and is not affiliated with TAR UMT in any way. Use at your own risk.")
+    st.markdown("This project does not store any of your credentials or data. All data is fetched directly from TAR UMT's ePrints system.")
+    st.markdown("You can check the source code [here](https://github.com/tzhenyu/PastYearFetcher/blob/main/pastyearfetcher.py) to assure your data is safe.")
+    st.markdown("Made by [tzhenyu](https://github.com/tzhenyu)")
+   
+
+def main():
+    if "dialog_shown" not in st.session_state:
+        disclaimer_dialog()  # Show dialog only first time
+        st.session_state.dialog_shown = True
+    
+    st.title("TAR UMT's Past Years Fetcher")
+ 
+ 
+    
+    st.markdown("""
+        <style>
+            /* Reduce font size for mobile */
+            @media (max-width: 740px) {
+                /* Reduce padding */
+                .block-container {
+                    padding-top: 2.5rem ;
+                    padding-bottom: 2.5rem ;
+                }
+
+                /* Header font size */
+                h1 {
+                    font-size: 20px !important;}
+
+                /* Standardize all buttons */
+                .stButton button,
+                div[data-testid="stDownloadButton"] button {
+                    padding: 0.25rem 0.5rem !important;
+                    font-size: 12px !important;
+                    width: 100% !important;
+                    min-height: 32px !important;
+                    box-sizing: border-box !important;
+                }
+
+                /* Remove extra padding/margin from download button container */
+                div[data-testid="stDownloadButton"] {
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+
+                /* Ensure button containers have same width */
+                div.element-container {
+                    width: 100% !important;
+                }
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
     # --- Session State Initialization ---
     for key, default in [
@@ -68,45 +189,44 @@ def main():
         ("username", ""),
         ("password", ""),
         ("cred_saved", False),
-        ("clear_on_next_run", False)
+        ("clear_on_next_run", False),
+        ("has_searched", False),
+        ("dialog_shown", False)
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
 
     # --- Credentials Box ---
-    with st.expander("Please put your TAR UMT credentials. We do not store your credentials.", expanded=True):
-        username_input = st.text_input("Username", key="eprints_username")
-        password_input = st.text_input("Password", type="password", key="eprints_password")
-        submit_cred = st.button("Submit Credentials")
-        if submit_cred:
-            st.session_state.username = username_input
-            st.session_state.password = password_input
-            st.session_state.cred_saved = True
-            st.success("Credentials saved!")
-
-    username = st.session_state.username
-    password = st.session_state.password
+    username, password = handle_credentials()
 
     # --- Clear logic ---
     if st.session_state.clear_on_next_run:
         st.session_state.past_year_title = ""
         st.session_state.selected_faculty = "All"
         st.session_state.search_results = []
+        for key in list(st.session_state.keys()):
+            if key.startswith('pdf_'):
+                del st.session_state[key]
         st.session_state.clear_on_next_run = False
 
     # --- Search UI ---
-    faculty_options = ["All"] + faculties
-    past_year_title = st.text_input(
-        "Course Code e.g. BACS1013",
-        key="past_year_title"
-    )
-    selected_faculty = st.selectbox(
-        "Filter by Faculty",
-        faculty_options,
-        key="selected_faculty"
-    )
+    col_course_code, col_faculty = st.columns([5, 2])
+    with col_course_code:
+        faculty_options = ["All"] + faculties
+        past_year_title = st.text_input(
+            "Course Code e.g. BACS1013",
+            key="past_year_title"
+        )
+    with col_faculty:
+        faculty_display = {"All": "All"} | {f: faculty_abbr[f] for f in faculties}
+        selected_faculty = st.selectbox(
+            "Filter by Faculty",
+            faculty_options,
+            format_func=lambda x: faculty_display[x],
+            key="selected_faculty"
+        )
 
-    col_search, col_clear, _ = st.columns([1, 1, 6])
+    col_search, col_clear, col_empty = st.columns([2, 2, 13])
     with col_search:
         search_clicked = st.button("Search")
     with col_clear:
@@ -114,61 +234,51 @@ def main():
 
     # --- Search and Clear Actions ---
     if search_clicked:
+        st.session_state.has_searched = True  # Set to True when search is clicked
         if past_year_title:
             st.session_state.search_results = search_paper(past_year_title, selected_faculty)
         else:
             st.session_state.search_results = []
     if clear_clicked:
         st.session_state.clear_on_next_run = True
+        st.session_state.has_searched = False  # Reset search state
         st.rerun()
 
     results = st.session_state.search_results
 
     # --- Results Display ---
-    if results:
-        st.write(f"{len(results)} result(s) found!")
-        for idx, paper in enumerate(results):
-            col1, col2, col3 = st.columns([1, 1, 1])
-            with col1:
-                st.write(f"{paper['year']} - {paper['month']}")
-            with col2:
-                abbrs = [faculty_abbr.get(f, f) for f in paper['faculties']]
-                st.write(f"{', '.join(abbrs)}")
-            with col3:
-                # Fetch the PDF download link from the paper page
-                # Create a unique key for this paper's PDF in session state
-                paper_key = f"pdf_{hashlib.md5(paper['link'].encode()).hexdigest()}"
-                if paper_key not in st.session_state:
-                    response = requests.get(paper['link'])
-                    if response.status_code == 200:
-                        soup = BeautifulSoup(response.text, "html.parser")
-                        meta_tags = soup.find_all("meta", attrs={"name": "eprints.document_url"})
-                        pdf_content = None
-                        for i, tag in enumerate(meta_tags):
-                            if tag.has_attr("content"):
-                                pdf_url = tag['content'] + "?download=1"
-                                pdf_response = requests.get(pdf_url, auth=HTTPBasicAuth(username, password))
-                                if pdf_response.status_code == 200:
-                                    pdf_content = pdf_response.content
-                                    break
-                                elif pdf_response.status_code == 401:
-                                    st.warning("❌ Invalid Credential: Please check your username and password.")
-                                    break
-                        st.session_state[paper_key] = pdf_content
-                    else:
-                        st.session_state[paper_key] = None
+    if results and not st.session_state.clear_on_next_run:
+        st.success(f"{len(results)} result(s) found!")
+        st.markdown("""
+            <style>
+                @media (max-width: 640px) {
 
-                pdf_content = st.session_state[paper_key]
-                if pdf_content:
-                    st.download_button(
-                        label=f"📥 Download PDF",
-                        data=pdf_content,
-                        file_name=f"{paper['title']} - {paper['year']}{paper['month']}.pdf",
-                        mime="application/pdf",
-                        key=f"download_{paper_key}"
-                    )
-                elif pdf_content is None:
-                    st.warning("⚠ Could not fetch the PDF file or not available.")
+                    /* Reduce text size */
+                    .stMarkdown p {
+                        font-size: 15px !important;
+                        margin: 0 !important;
+                        white-space: nowrap !important;
+                        overflow: hidden !important;
+                        text-overflow: ellipsis !important;
+                    }
+
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        for idx, paper in enumerate(results):
+            abbrs = [faculty_abbr.get(f, f) for f in paper['faculties']]
+
+            col1, col2 = st.columns([6,1])
+            with col1:
+                abbrs = [faculty_abbr.get(f, f) for f in paper['faculties']]
+                
+                st.write(f"{paper['year']} - {paper['month']} | {', '.join(abbrs)} | {paper['title']}")
+
+            with col2:
+                handle_pdf_actions(col2, paper, username, password)
+    elif st.session_state.has_searched and not st.session_state.clear_on_next_run:
+        st.warning("No results found.")
 
 if __name__ == "__main__":
     main()
+    print('Reloaded! All good!')
