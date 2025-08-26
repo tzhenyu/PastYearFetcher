@@ -62,7 +62,15 @@ def generate_download_script(b64_content, safe_filename, delay_ms):
     """Generate JavaScript for automatic PDF download."""
     return f"""
     <script>
-    (function() {{
+    // Hide this iframe immediately
+    if (window.frameElement) {{
+        window.frameElement.style.cssText = 'position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;border:none!important;';
+        if (window.frameElement.parentElement) {{
+            window.frameElement.parentElement.style.cssText = 'position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;';
+        }}
+    }}
+    
+    setTimeout(function() {{
         try {{
             const data = atob('{b64_content}');
             const bytes = new Uint8Array(data.length);
@@ -74,36 +82,30 @@ def generate_download_script(b64_content, safe_filename, delay_ms):
             const a = document.createElement('a');
             a.href = url;
             a.download = '{safe_filename}';
-            a.style.cssText = 'position:absolute;left:-9999px;opacity:0;pointer-events:none;';
+            a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
             
-            // Clean up after download is triggered
-            setTimeout(() => {{
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            }}, 100);
-            
-            // Try to remove parent iframe after successful download
+            // Try to hide parent iframe after download
             setTimeout(() => {{
                 try {{
                     if (window.parent && window.parent.document) {{
                         const iframes = window.parent.document.querySelectorAll('div[data-testid="stIFrame"]');
-                        iframes.forEach(iframe => {{
-                            if (iframe.querySelector('iframe')) {{
-                                iframe.style.cssText = 'display:none!important;width:0!important;height:0!important;';
-                            }}
+                        iframes.forEach(container => {{
+                            container.style.cssText = 'position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;';
                         }});
                     }}
                 }} catch(e) {{
-                    // Cross-origin access blocked, ignore
+                    // Ignore cross-origin errors
                 }}
-            }}, 1000);
+            }}, 200);
             
         }} catch(e) {{
             console.error('Download failed:', e);
         }}
-    }})();
+    }}, {delay_ms});
     </script>
     """
 
@@ -132,7 +134,6 @@ def apply_custom_styles():
                     font-size: 20px !important;}
 
                 /* Standardize all buttons */
-                div[data-testid="stLayoutWrapper"] button,
                 .stButton button,
                 div[data-testid="stVerticalBlockBorderWrapper"] button {
                     font-size: 12px !important;
@@ -164,13 +165,11 @@ def apply_custom_styles():
                 display: flex !important;
                 flex-direction: column !important;
                 align-items: center !important;
-                z-index: 9999 !important;
             }           
              
             [data-testid=stToastContainer] [data-testid=stMarkdownContainer] > p {
-                font-size: 1.1rem !important;
-                padding: 10px 10px 10px 10px !important;
-                margin: 0 !important;
+                font-size: 1.5rem;
+                padding: 10px 10px 10px 10px;
             }
             
             /* Mobile toast styling */
@@ -181,19 +180,40 @@ def apply_custom_styles():
                 }
             }
             
-            
-            /* Force consistent column layout */
-            .stColumn {
-                padding: 0 !important;
+            /* Center download buttons in container */
+            div[data-testid="stVerticalBlockBorderWrapper"] .stColumn:last-child div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"] {
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
+                min-height: 60px !important;
             }
             
-            /* Ensure buttons maintain consistent styling */
-            .stButton > button {
-                border-radius: 0.25rem !important;
-                border: 1px solid rgb(230, 234, 241) !important;
-                background-color: rgb(255, 255, 255) !important;
+            /* Prevent button state changes - target the correct button */
+            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"] {
+                background-color: #ffffff !important;
+                border: 1px solid #d3d3d3 !important;
+                color: #262730 !important;
+                transition: none !important;
+                transform: none !important;
+                position: relative !important;
             }
             
+            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:hover {
+                background-color: #f8f9fa !important;
+                border-color: #d3d3d3 !important;
+                color: #262730 !important;
+                transform: none !important;
+            }
+            
+            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:active,
+            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:focus {
+                background-color: #ffffff !important;
+                border-color: #d3d3d3 !important;
+                color: #262730 !important;
+                box-shadow: none !important;
+                outline: none !important;
+                transform: none !important;
+            }
 
             
         </style>
@@ -230,7 +250,7 @@ def process_single_download(paper, username, password):
         safe_filename = filename.replace("'", "\\'").replace('"', '\\"')
         b64_content = base64.b64encode(content).decode()
         download_script = generate_download_script(b64_content, safe_filename, 0)
-        st.components.v1.html(download_script, height=1, width=1)
+        st.components.v1.html(download_script, height=0)
         st.toast(f"✅ Download Success!")
     else:
         st.toast(f"❌ Failed: {filename}")
@@ -342,6 +362,7 @@ def main():
                 opacity: 0 !important;
                 pointer-events: none !important;
                 border: none !important;
+                visibility: hidden !important;
             }
             
             div[data-testid="stIFrame"] {
@@ -351,6 +372,13 @@ def main():
                 height: 1px !important;
                 opacity: 0 !important;
                 pointer-events: none !important;
+                visibility: hidden !important;
+                overflow: hidden !important;
+            }
+            
+            /* Additional hiding for iframe containers */
+            div[data-testid="stIFrame"]:has(iframe[src^="data:text/html"]) {
+                display: none !important;
             }
         </style>
     """, unsafe_allow_html=True)
