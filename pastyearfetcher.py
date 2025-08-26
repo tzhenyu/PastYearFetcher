@@ -304,7 +304,7 @@ def main():
     st.title("TAR UMT Past Years Fetcher")
     
     # Apply custom CSS styles
-    apply_custom_styles()
+    # apply_custom_styles()
 
     # Initialize session state variables
     initialize_session_state()
