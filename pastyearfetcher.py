@@ -304,7 +304,24 @@ def main():
     st.title("TAR UMT Past Years Fetcher")
     
     # Apply custom CSS styles
-    # apply_custom_styles()
+    st.markdown("""
+        <style>
+            /* Hide empty element containers that appear after download */
+            .stElementContainer:empty,
+            div[data-testid="stElementContainer"]:empty {
+                display: none !important;
+            }
+            
+            /* Hide st.components.v1.html containers */
+            iframe[src^="data:text/html"] {
+                display: none !important;
+            }
+            
+            div[data-testid="stIFrame"] {
+                display: none !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
     # Initialize session state variables
     initialize_session_state()
