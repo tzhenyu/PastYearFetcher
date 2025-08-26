@@ -164,6 +164,33 @@ def apply_custom_styles():
                 justify-content: center !important;
                 min-height: 60px !important;
             }
+            
+            /* Prevent button state changes - target the correct button */
+            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"] {
+                background-color: #ffffff !important;
+                border: 1px solid #d3d3d3 !important;
+                color: #262730 !important;
+                transition: none !important;
+                transform: none !important;
+                position: relative !important;
+            }
+            
+            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:hover {
+                background-color: #f8f9fa !important;
+                border-color: #d3d3d3 !important;
+                color: #262730 !important;
+                transform: none !important;
+            }
+            
+            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:active,
+            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:focus {
+                background-color: #ffffff !important;
+                border-color: #d3d3d3 !important;
+                color: #262730 !important;
+                box-shadow: none !important;
+                outline: none !important;
+                transform: none !important;
+            }
 
             
         </style>
