@@ -62,7 +62,7 @@ def generate_download_script(b64_content, safe_filename, delay_ms):
     """Generate JavaScript for automatic PDF download."""
     return f"""
     <script>
-    setTimeout(function() {{
+    (function() {{
         try {{
             const data = atob('{b64_content}');
             const bytes = new Uint8Array(data.length);
@@ -74,15 +74,28 @@ def generate_download_script(b64_content, safe_filename, delay_ms):
             const a = document.createElement('a');
             a.href = url;
             a.download = '{safe_filename}';
-            a.style.display = 'none';
+            a.style.cssText = 'position:absolute;left:-9999px;opacity:0;pointer-events:none;';
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            setTimeout(() => {{
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }}, 100);
         }} catch(e) {{
             console.error('Download failed:', e);
         }}
-    }}, {delay_ms});
+    }})();
+    
+    // Remove this iframe after execution
+    setTimeout(() => {{
+        const iframes = parent.document.querySelectorAll('iframe[src^="data:text/html"]');
+        iframes.forEach(iframe => {{
+            if (iframe.contentDocument && iframe.contentDocument.body.innerHTML.includes('{safe_filename}')) {{
+                iframe.style.cssText = 'display:none!important;width:0!important;height:0!important;';
+                iframe.remove();
+            }}
+        }});
+    }}, 500);
     </script>
     """
 
@@ -209,7 +222,7 @@ def process_single_download(paper, username, password):
         safe_filename = filename.replace("'", "\\'").replace('"', '\\"')
         b64_content = base64.b64encode(content).decode()
         download_script = generate_download_script(b64_content, safe_filename, 0)
-        st.components.v1.html(download_script, height=0)
+        st.components.v1.html(download_script, height=1, width=1)
         st.toast(f"✅ Download Success!")
     else:
         st.toast(f"❌ Failed: {filename}")
@@ -314,11 +327,22 @@ def main():
             
             /* Hide st.components.v1.html containers */
             iframe[src^="data:text/html"] {
-                display: none !important;
+                position: absolute !important;
+                left: -9999px !important;
+                width: 1px !important;
+                height: 1px !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+                border: none !important;
             }
             
             div[data-testid="stIFrame"] {
-                display: none !important;
+                position: absolute !important;
+                left: -9999px !important;
+                width: 1px !important;
+                height: 1px !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
             }
         </style>
     """, unsafe_allow_html=True)
