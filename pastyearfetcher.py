@@ -112,7 +112,13 @@ def apply_custom_styles():
 
                 /* Standardize all buttons */
                 .stButton button,
-                div[data-testid="stDownloadButton"] button,
+                div[data-testid="stVerticalBlockBorderWrapper"] button {
+                    font-size: 12px !important;
+                    width: 100% !important;
+                    min-height: 32px !important;
+                    box-sizing: border-box !important;
+                }
+
                 div[data-testid="stPopover"] button {
                     padding: 0.25rem 0.5rem !important;
                     font-size: 12px !important;
@@ -129,11 +135,6 @@ def apply_custom_styles():
             
             /* Toast styling */
             div[data-testid=stToastContainer] {
-                align-items: end;
-                position: sticky; 
-            }
-                
-            div[data-testid=stToastContainer] {
                 position: fixed !important;
                 bottom: 10% !important;
                 left: 50% !important;
@@ -147,6 +148,24 @@ def apply_custom_styles():
                 font-size: 1.5rem;
                 padding: 10px 10px 10px 10px;
             }
+            
+            /* Mobile toast styling */
+            @media (max-width: 740px) {
+                [data-testid=stToastContainer] [data-testid=stMarkdownContainer] > p {
+                    font-size: 1rem !important;
+                    padding: 8px 12px !important;
+                }
+            }
+            
+            /* Center download buttons in container */
+            div[data-testid="stVerticalBlockBorderWrapper"] .stColumn:last-child div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"] {
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
+                min-height: 60px !important;
+            }
+
+            
         </style>
     """, unsafe_allow_html=True)
 
@@ -160,17 +179,6 @@ def clear_session_data():
         if key.startswith('pdf_'):
             del st.session_state[key]
     st.session_state.clear_on_next_run = False
-
-
-def show_toast_messages(successful_downloads, failed_downloads):
-    """Show appropriate toast messages for download results."""
-    if successful_downloads:
-        st.toast(f"{len(successful_downloads)} paper(s) downloaded automatically!", icon='✅')
-    
-    if failed_downloads:
-        st.toast(f"{len(failed_downloads)} paper(s) failed to download:", icon='❌')
-        for error_msg in failed_downloads:
-            st.toast(f"• {error_msg}")
 
 
 def create_display_dataframe(results):
@@ -193,9 +201,9 @@ def process_single_download(paper, username, password):
         b64_content = base64.b64encode(content).decode()
         download_script = generate_download_script(b64_content, safe_filename, 0)
         st.components.v1.html(download_script, height=0)
-        st.toast(f"Downloaded: {filename}", icon='✅')
+        st.toast(f"✅ Download Success!")
     else:
-        st.toast(f"Failed: {filename}", icon='❌')
+        st.toast(f"❌ Failed: {filename}")
 
 
 
@@ -275,8 +283,8 @@ def handle_pdf_actions(paper, username, password):
 def disclaimer_dialog():
     st.markdown("This is a personal project and is not affiliated with TAR UMT in any way. Use at your own risk.")
     st.markdown("This project does not store any of your credentials or data. All data is fetched directly from TAR UMT's ePrints system.")
-    st.markdown("You can check the source code [here](https://github.com/tzhenyu/PastYearFetcher/blob/main/pastyearfetcher.py)")
-    st.markdown("Made by [tzhenyu](https://github.com/tzhenyu).")
+    st.markdown("You can check the source code [here](https://github.com/tzhenyu/PastYearFetcher/blob/main/pastyearfetcher.py).")
+    st.markdown("Made by [tzhenyu](https://github.com/tzhenyu)")
    
 
 def main():
@@ -300,10 +308,8 @@ def main():
         clear_session_data()
 
     # --- Search UI ---
-    past_year_title = st.text_input(
-        "Course Code e.g. BACS1013",
-        key="past_year_title"
-    )
+
+    past_year_title = st.text_input("Search course", placeholder="e.g. BACS1013 or Problem Solving", key="past_year_title")
 
     col_login, col_search, col_clear, col_empty = st.columns([3, 3, 3, 12])
     with col_search:
@@ -329,6 +335,8 @@ def main():
         st.session_state.has_searched = True  # Set to True when search is clicked
         if past_year_title:
             st.session_state.search_results = search_paper(past_year_title, "All")
+            if st.session_state.search_results:
+                st.toast(f"{len(st.session_state.search_results)} result(s) found.")
         else:
             st.session_state.search_results = []
     if clear_clicked:
@@ -343,23 +351,24 @@ def main():
         # Create formatted DataFrame for display
         display_df = create_display_dataframe(results)
         
-        st.success(f"{len(results)} result(s) found.")
-        
         # Display papers with individual download buttons
         for idx, (_, row) in enumerate(display_df.iterrows()):
             paper = results[idx]
-            col1, col2 = st.columns([4, 1])
             
-            with col1:
-                st.write(f"{paper['title']} ({row['Year']}, {row['Month']}) - {row['Faculties']}")
-            
-            with col2:
-                download_key = f"download_{idx}"
-                if st.button("Download", key=download_key):
-                    if not username or not password:
-                        st.toast("Please enter your TARUMT login credentials to download papers.")
-                    else:
-                        process_single_download(paper, username, password)
+            with st.container(border=True):
+                col1, col2 = st.columns([5.5, 1])
+                
+                with col1:
+                    st.markdown(f"<b>{paper['title']}</b> ", unsafe_allow_html=True)
+                    st.markdown(f"{row['Year']} · {row['Month']} · {row['Faculties']}", unsafe_allow_html=True)
+                
+                with col2:
+                    download_key = f"download_{idx}"
+                    if st.button("Download", key=download_key):
+                        if not username or not password:
+                            st.toast("Please enter your TARUMT login credentials to download papers.")
+                        else:
+                            process_single_download(paper, username, password)
 
     elif st.session_state.has_searched and not st.session_state.clear_on_next_run:
         st.warning("No results found.")
