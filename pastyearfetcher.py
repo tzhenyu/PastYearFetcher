@@ -50,7 +50,7 @@ def sanitize_filename(filename):
 def create_error_message(paper_title, error_type):
     """Create standardized error messages for PDF download failures."""
     error_messages = {
-        'unauthorized': f"Invalid credentials for {paper_title}",
+        'unauthorized': f"Invalid credentials",
         'not_found': f"PDF not found for {paper_title}",
         'access_failed': f"Failed to access {paper_title}",
         'download_failed': f"Download failed for {paper_title}"
@@ -180,50 +180,23 @@ def create_display_dataframe(results):
     
     # Reorder and rename columns for display
     display_df = df[['year', 'month', 'faculties_str']].copy()
-    display_df['Select'] = False  # Add checkbox column
-    display_df.columns = ['Year', 'Month', 'Faculties', 'Select']
+    display_df.columns = ['Year', 'Month', 'Faculties']
     return display_df
 
 
-def get_data_editor_config():
-    """Get configuration for the data editor."""
-    return {
-        "Select": st.column_config.CheckboxColumn(
-            "Select",
-            default=False
-        )
-    }
+def process_single_download(paper, username, password):
+    """Process PDF download for a single paper."""
+    success, content, filename = handle_pdf_actions(paper, username, password)
+    
+    if success:
+        safe_filename = filename.replace("'", "\\'").replace('"', '\\"')
+        b64_content = base64.b64encode(content).decode()
+        download_script = generate_download_script(b64_content, safe_filename, 0)
+        st.components.v1.html(download_script, height=0)
+        st.toast(f"Downloaded: {filename}", icon='✅')
+    else:
+        st.toast(f"Failed: {filename}", icon='❌')
 
-
-def process_downloads(selected_indices, results, username, password):
-    """Process PDF downloads for selected papers."""
-    st.toast(f"Processing {len(selected_indices)} selected paper(s)...", icon='🔄')
-    successful_downloads = []
-    failed_downloads = []
-    download_scripts = []
-    
-    for idx in selected_indices:
-        paper = results[idx]
-        success, content, filename = handle_pdf_actions(paper, username, password)
-        
-        if success:
-            # Clean filename for JavaScript
-            safe_filename = filename.replace("'", "\\'").replace('"', '\\"')
-            b64_content = base64.b64encode(content).decode()
-            
-            download_script = generate_download_script(b64_content, safe_filename, idx * 1000)
-            download_scripts.append(download_script)
-            successful_downloads.append(filename)
-        else:
-            failed_downloads.append(filename)
-    
-    # Show toast messages and execute downloads
-    show_toast_messages(successful_downloads, failed_downloads)
-    
-    if download_scripts:
-        # Execute all download scripts with delay
-        combined_script = "".join(download_scripts)
-        st.components.v1.html(combined_script, height=0)
 
 
 def search_paper(past_year_title, selected_faculty):
@@ -332,7 +305,7 @@ def main():
         key="past_year_title"
     )
 
-    col_login, col_search, col_clear,col_empty, col_download_ticked  = st.columns([3, 3, 3, 12,1])
+    col_login, col_search, col_clear, col_empty = st.columns([3, 3, 3, 12])
     with col_search:
         search_clicked = st.button("Search")
     with col_clear:
@@ -349,8 +322,6 @@ def main():
                 st.session_state.password = password_input
                 st.session_state.cred_saved = True
                 st.success("Credentials saved!")
-    with col_download_ticked:
-        pass  # Download button will appear only when results are found
 
 
     # --- Search and Clear Actions ---
@@ -372,31 +343,23 @@ def main():
         # Create formatted DataFrame for display
         display_df = create_display_dataframe(results)
         
-        st.success(f"{len(results)} result(s) found. Tick the paper you want to download and click \"Download\" button.")
+        st.success(f"{len(results)} result(s) found.")
         
-        # Download button appears only when results are found
-        download_clicked = st.button("Download", key="download_results")
-        
-        # Display DataFrame and capture selections
-        edited_df = st.data_editor(
-            display_df,
-            use_container_width=True,
-            hide_index=True,
-            height=int((len(display_df.reset_index(drop=True))+1) * 35),
-            column_config=get_data_editor_config(),
-            key="papers_selection"
-        )
-        
-        # Handle download action
-        if download_clicked:
-            selected_indices = edited_df[edited_df['Select']].index.tolist()
-            if selected_indices:
-                if not username or not password:
-                    st.toast("Please enter your TARUMT login credentials to download papers.")
-                else:
-                    process_downloads(selected_indices, results, username, password)
-            else:
-                st.toast("Please select at least one paper to download.")
+        # Display papers with individual download buttons
+        for idx, (_, row) in enumerate(display_df.iterrows()):
+            paper = results[idx]
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                st.write(f"{paper['title']} ({row['Year']}, {row['Month']}) - {row['Faculties']}")
+            
+            with col2:
+                download_key = f"download_{idx}"
+                if st.button("Download", key=download_key):
+                    if not username or not password:
+                        st.toast("Please enter your TARUMT login credentials to download papers.")
+                    else:
+                        process_single_download(paper, username, password)
 
     elif st.session_state.has_searched and not st.session_state.clear_on_next_run:
         st.warning("No results found.")
