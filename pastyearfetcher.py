@@ -77,25 +77,33 @@ def generate_download_script(b64_content, safe_filename, delay_ms):
             a.style.cssText = 'position:absolute;left:-9999px;opacity:0;pointer-events:none;';
             document.body.appendChild(a);
             a.click();
+            
+            // Clean up after download is triggered
             setTimeout(() => {{
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
             }}, 100);
+            
+            // Try to remove parent iframe after successful download
+            setTimeout(() => {{
+                try {{
+                    if (window.parent && window.parent.document) {{
+                        const iframes = window.parent.document.querySelectorAll('div[data-testid="stIFrame"]');
+                        iframes.forEach(iframe => {{
+                            if (iframe.querySelector('iframe')) {{
+                                iframe.style.cssText = 'display:none!important;width:0!important;height:0!important;';
+                            }}
+                        }});
+                    }}
+                }} catch(e) {{
+                    // Cross-origin access blocked, ignore
+                }}
+            }}, 1000);
+            
         }} catch(e) {{
             console.error('Download failed:', e);
         }}
     }})();
-    
-    // Remove this iframe after execution
-    setTimeout(() => {{
-        const iframes = parent.document.querySelectorAll('iframe[src^="data:text/html"]');
-        iframes.forEach(iframe => {{
-            if (iframe.contentDocument && iframe.contentDocument.body.innerHTML.includes('{safe_filename}')) {{
-                iframe.style.cssText = 'display:none!important;width:0!important;height:0!important;';
-                iframe.remove();
-            }}
-        }});
-    }}, 500);
     </script>
     """
 
