@@ -111,6 +111,7 @@ def apply_custom_styles():
                     font-size: 20px !important;}
 
                 /* Standardize all buttons */
+                div[data-testid="stLayoutWrapper"] button,
                 .stButton button,
                 div[data-testid="stVerticalBlockBorderWrapper"] button {
                     font-size: 12px !important;
@@ -142,11 +143,13 @@ def apply_custom_styles():
                 display: flex !important;
                 flex-direction: column !important;
                 align-items: center !important;
+                z-index: 9999 !important;
             }           
              
             [data-testid=stToastContainer] [data-testid=stMarkdownContainer] > p {
-                font-size: 1.1rem;
-                padding: 10px 10px 10px 10px;
+                font-size: 1.1rem !important;
+                padding: 10px 10px 10px 10px !important;
+                margin: 0 !important;
             }
             
             /* Mobile toast styling */
@@ -155,6 +158,19 @@ def apply_custom_styles():
                     font-size: 1rem !important;
                     padding: 8px 12px !important;
                 }
+            }
+            
+            
+            /* Force consistent column layout */
+            .stColumn {
+                padding: 0 !important;
+            }
+            
+            /* Ensure buttons maintain consistent styling */
+            .stButton > button {
+                border-radius: 0.25rem !important;
+                border: 1px solid rgb(230, 234, 241) !important;
+                background-color: rgb(255, 255, 255) !important;
             }
             
 
