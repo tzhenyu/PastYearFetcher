@@ -259,7 +259,8 @@ def process_single_download(paper, username, password):
 
 def search_paper(past_year_title, selected_faculty):
     query = past_year_title.replace(" ", "+")
-    rss_url = f"https://eprints.tarc.edu.my/cgi/search/archive/simple/export_eprints_RSS2.xml?screen=Search&dataset=archive&_action_export=1&output=RSS2&exp=0%7C1%7C-date%2Fcreators_name%2Ftitle%7Carchive%7C-%7Cq%3Aabstract%2Fcreators_name%2Fdate%2Fdocuments%2Ftitle%3AALL%3AIN%3A{query}%7C-%7Ceprint_status%3Aeprint_status%3AANY%3AEQ%3Aarchive%7Cmetadata_visibility%3Ametadata_visibility%3AANY%3AEQ%3Ashow&n="
+    rss_url = f"https://eprints.tarc.edu.my/cgi/search/archive/advanced/export_eprints_RSS2.xml?screen=Search&dataset=archive&_action_export=1&output=RSS2&exp=0%7C1%7C-date%2Fcreators_name%2Ftitle%7Carchive%7C-%7Ctitle%3Atitle%3AALL%3AIN%3A{query}%7Ctype%3Atype%3AANY%3AEQ%3Ateaching_resource%7C-%7Ceprint_status%3Aeprint_status%3AANY%3AEQ%3Aarchive%7Cmetadata_visibility%3Ametadata_visibility%3AANY%3AEQ%3Ashow&n="
+    print(rss_url)
     response = requests.get(rss_url)
     if response.status_code != 200:
         return []
@@ -339,7 +340,7 @@ def disclaimer_dialog():
 
 def main():
     if "dialog_shown" not in st.session_state:
-        disclaimer_dialog()  # Show dialog only first time
+        disclaimer_dialog()
         st.session_state.dialog_shown = True
     
     st.title("TAR UMT Past Years Fetcher")
@@ -385,17 +386,41 @@ def main():
 
     # Initialize session state variables
     initialize_session_state()
-
-    # Get credentials from session state
     username, password = st.session_state.username, st.session_state.password
 
-    # Handle clear logic
     if st.session_state.clear_on_next_run:
         clear_session_data()
 
-    # --- Search UI ---
+    col1, col2 = st.columns([4,1])
+    with col1:
+        past_year_title = st.text_input("Search course", placeholder="e.g. BACS1013 or Problem Solving", key="past_year_title", on_change=lambda: setattr(st.session_state, 'search_triggered', True))
+    with col2:
+        selected_faculty = st.selectbox(
+            "Filter by Faculty",
+            ["All"] + list(FACULTY_ABBR.values()),
+            key="selected_faculty",
+            on_change=lambda: setattr(st.session_state, 'faculty_changed', True)
+        )
 
-    past_year_title = st.text_input("Search course", placeholder="e.g. BACS1013 or Problem Solving", key="past_year_title")
+    # Check if search should be triggered by Enter key or faculty change
+    if (hasattr(st.session_state, 'search_triggered') and st.session_state.search_triggered) or \
+       (hasattr(st.session_state, 'faculty_changed') and st.session_state.faculty_changed):
+        if past_year_title != st.session_state.get('last_search_query', '') or selected_faculty != st.session_state.get('last_faculty_filter', ''):
+            st.session_state.has_searched = True
+            if past_year_title:
+                faculty_filter = "All" if selected_faculty == "All" else next(
+                    (k for k, v in FACULTY_ABBR.items() if v == selected_faculty), "All"
+                )
+                st.session_state.search_results = search_paper(past_year_title, faculty_filter)
+                if st.session_state.search_results:
+                    st.toast(f"{len(st.session_state.search_results)} result(s) found.")
+            else:
+                st.session_state.search_results = []
+            st.session_state.last_search_query = past_year_title
+            st.session_state.last_faculty_filter = selected_faculty
+        st.session_state.search_triggered = False
+        if hasattr(st.session_state, 'faculty_changed'):
+            st.session_state.faculty_changed = False
 
     col_login, col_search, col_clear, col_empty = st.columns([3, 3, 3, 12])
     with col_search:
@@ -415,20 +440,20 @@ def main():
                 st.session_state.cred_saved = True
                 st.success("Credentials saved!")
 
-
-    # --- Search and Clear Actions ---
     if search_clicked:
-        st.session_state.has_searched = True  # Set to True when search is clicked
+        st.session_state.has_searched = True
         if past_year_title:
-            st.session_state.search_results = search_paper(past_year_title, "All")
+            faculty_filter = "All" if selected_faculty == "All" else next(
+                (k for k, v in FACULTY_ABBR.items() if v == selected_faculty), "All"
+            )
+            st.session_state.search_results = search_paper(past_year_title, faculty_filter)
             if st.session_state.search_results:
                 st.toast(f"{len(st.session_state.search_results)} result(s) found.")
         else:
             st.session_state.search_results = []
     if clear_clicked:
         st.session_state.clear_on_next_run = True
-        st.session_state.has_searched = False  # Reset search state
-        st.rerun()
+        st.session_state.has_searched = False
 
     results = st.session_state.search_results
 
@@ -462,3 +487,5 @@ def main():
 if __name__ == "__main__":
     main()
     print('Reloaded! All good!')
+
+
