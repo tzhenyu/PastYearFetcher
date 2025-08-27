@@ -262,7 +262,6 @@ def process_single_download(paper, username, password):
 def search_paper(past_year_title, selected_faculty):
     query = past_year_title.replace(" ", "+")
     rss_url = f"https://eprints.tarc.edu.my/cgi/search/archive/advanced/export_eprints_RSS2.xml?screen=Search&dataset=archive&_action_export=1&output=RSS2&exp=0%7C1%7C-date%2Fcreators_name%2Ftitle%7Carchive%7C-%7Ctitle%3Atitle%3AALL%3AIN%3A{query}%7Ctype%3Atype%3AANY%3AEQ%3Ateaching_resource%7C-%7Ceprint_status%3Aeprint_status%3AANY%3AEQ%3Aarchive%7Cmetadata_visibility%3Ametadata_visibility%3AANY%3AEQ%3Ashow&n="
-    print(rss_url)
     response = requests.get(rss_url)
     if response.status_code != 200:
         return []
