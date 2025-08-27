@@ -7,6 +7,8 @@ import hashlib
 import pandas as pd
 import base64
 
+st.set_page_config(page_title="Past Year Fetcher", page_icon="📃")
+
 # Constants
 FACULTIES = [
     "Faculty of Accountancy, Finance and Business",
@@ -344,7 +346,8 @@ def main():
         disclaimer_dialog()
         st.session_state.dialog_shown = True
     
-    st.title("TAR UMT Past Years Fetcher")
+    st.title("📃 TAR UMT Past Years Fetcher")
+    st.markdown("[Any feedback is welcome!](https://forms.gle/dSaszkRzZ6reoFc88)")
     
     # Apply custom CSS styles
     st.markdown("""
