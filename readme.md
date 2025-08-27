@@ -1,21 +1,40 @@
 # Past Year Fetcher
 
-**Past Year Fetcher** is a simple tool to fetch past year examination papers from TAR UMT's ePrints system. It allows students to search for past year papers by course code and filter by faculty, then download the papers directly.
+**Past Year Fetcher** is a lightweight tool that simplifies downloading past year examination papers from **TAR UMT’s ePrints system**.
 
-## How to use
+## Why Not Just Use ePrints?
 
-1. **Enter Your TAR UMT Credentials**: You need to provide your TAR UMT username and password to access the ePrints system.
-2. **Search for Papers**: Input a course code (e.g., `BACS1013`) and optionally filter by faculty.
-3. **Download Papers**: Once results are found, you can download the past year papers directly through the interface.
+| **ePrints System**                              | **Past Year Fetcher**                    |
+| ----------------------------------------------- | ---------------------------------------- |
+| Log in twice just to get access                 | Log in once, then fetch everything       |
+| Download papers one by one with repeated clicks | Download all matching papers in one go   |
+| Duplicate filenames, requiring manual renaming  | Files auto-named by subject, month, year |
+| Slow, multi-step workflow                       | Instant, clean, and efficient            |
 
-This project does not store any of your credentials or data. All requests are made directly to TAR UMT's ePrints server, and downloaded files are not saved locally by this tool.
+## Features
 
-## How it works
-It takes the advantage of RSS feature of ePrints system, that fetch search results in XML format. The script can extract the information needed and prepare the download links from it. More info in the source code.
+* **One login, instant access** – no more logging in twice.
+* **Batch downloads** – get all matching papers at once.
+* **Smart naming** – files are auto-named by *subject, month, year* for easy reference.
+* **Search & filter** – find papers by course code and faculty.
+
+
+## How to Use
+
+1. **Login** – Enter your TAR UMT username and password (needed to access ePrints).
+2. **Search** – Input a course code (e.g., `BACS1013`), and optionally filter by faculty.
+3. **Download** – Instantly fetch all matching papers in an organized format.
+
+## How It Works
+
+The tool uses the **RSS feed feature** of TAR UMT’s ePrints system. Search results are pulled in XML format, parsed by the script, and converted into direct download links. Check the source code for details.
+
 
 ## Disclaimer
 
-> ⚠️ This is a personal project and is **not affiliated with TAR UMT** in any way. Use at your own risk.  
-> The developer assumes no responsibility for any issues arising from the use of this tool.  
-> Please respect TAR UMT's terms of use and only use this tool for educational purposes.
+This is a **personal project** and is **not affiliated with TAR UMT**.
+
+* Credentials are **not stored** — all requests go directly to the ePrints server.
+* Downloaded files are not saved locally by this tool.
+* Use at your own risk, and only for educational purposes in line with TAR UMT’s terms of use.
 
