@@ -46,9 +46,6 @@ SESSION_KEYS = {
 }
 
 
-def sanitize_filename(filename):
-    """Sanitize filename for safe file download."""
-    return "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.'))
 
 
 def create_error_message(paper_title, error_type):
@@ -272,7 +269,7 @@ def search_paper(past_year_title, selected_faculty):
     results = []
     for child in root.findall(".//channel/item"):
         try:
-            title = child.find("title").text.split(" (")[0]
+            title = child.find("title").text.strip().split(" (")[0]            
             link = child.find("link").text
             description = child.find("description").text.split(".")[0]
             year = description.split(" (")[1].split(")")[0]
@@ -306,8 +303,9 @@ def handle_pdf_actions(paper, username, password):
                     pdf_url = tag['content'] + "?download=1"
                     pdf_response = requests.get(pdf_url, auth=HTTPBasicAuth(username, password))
                     if pdf_response.status_code == 200:
-                        filename = f"{paper['title']}_{paper['year']}_{paper['month']}.pdf"
-                        filename = sanitize_filename(filename)
+                        month = paper['month'].replace(" ", "")
+                        filename = f"{paper['title']}_{paper['year']}_{month}.pdf"
+                        filename = filename.replace(" ", "_")
                         
                         st.session_state[paper_key] = {
                             'content': pdf_response.content,
