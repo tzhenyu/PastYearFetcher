@@ -15,7 +15,8 @@ FACULTIES = [
     "Faculty of Built Environment",
     "Faculty of Engineering and Technology",
     "Faculty of Communication and Creative Industries",
-    "Faculty of Social Science and Humanities"
+    "Faculty of Social Science and Humanities",
+    "Centre for Pre-University Studies"
 ]
 
 FACULTY_ABBR = {
@@ -25,7 +26,8 @@ FACULTY_ABBR = {
     "Faculty of Built Environment": "FOBE",
     "Faculty of Engineering and Technology": "FOET",
     "Faculty of Communication and Creative Industries": "FCCI",
-    "Faculty of Social Science and Humanities": "FSSH"
+    "Faculty of Social Science and Humanities": "FSSH",
+    "Centre for Pre-University Studies": "Foundation"
 }
 
 # Session state keys
