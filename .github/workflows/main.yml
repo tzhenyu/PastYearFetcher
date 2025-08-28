@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '0 */10 * * *'  # Runs every 10 hours
 
+permissions:
+  contents: write  # <-- this gives GITHUB_TOKEN permission to push commits
+
 jobs:
   empty-commit:
     runs-on: ubuntu-latest
