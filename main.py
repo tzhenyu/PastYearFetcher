@@ -246,13 +246,17 @@ def create_display_dataframe(results):
 def process_single_download(paper, username, password):
     """Process PDF download for a single paper."""
     success, content, filename = handle_pdf_actions(paper, username, password)
-    
+
     if success:
-        safe_filename = filename.replace("'", "\\'").replace('"', '\\"')
-        b64_content = base64.b64encode(content).decode()
-        download_script = generate_download_script(b64_content, safe_filename, 0)
-        st.components.v1.html(download_script, height=0)
-        st.toast(f"✅ Download Success!")
+        # Use Streamlit's native download button for proper browser download behavior
+        st.download_button(
+            label="📥 Download PDF",
+            data=content,
+            file_name=filename,
+            mime="application/pdf",
+            key=f"download_{hashlib.md5(paper['link'].encode()).hexdigest()}"
+        )
+        st.toast(f"✅ PDF ready for download!")
     else:
         st.toast(f"❌ Failed: {filename}")
 
@@ -477,11 +481,26 @@ def main():
                 
                 with col2:
                     download_key = f"download_{idx}"
-                    if st.button("Download", key=download_key):
-                        if not username or not password:
-                            st.toast("Please enter your TARUMT login credentials to download papers.")
-                        else:
-                            process_single_download(paper, username, password)
+                    paper_key = f"pdf_{hashlib.md5(paper['link'].encode()).hexdigest()}"
+
+                    # Check if PDF is already cached and ready for download
+                    if paper_key in st.session_state and st.session_state[paper_key].get('status') == 'success':
+                        # Show download button for cached PDF
+                        cached_data = st.session_state[paper_key]
+                        st.download_button(
+                            label="📥 Download",
+                            data=cached_data['content'],
+                            file_name=cached_data['filename'],
+                            mime="application/pdf",
+                            key=f"download_btn_{idx}"
+                        )
+                    else:
+                        # Show fetch button
+                        if st.button("Fetch", key=download_key):
+                            if not username or not password:
+                                st.toast("Please enter your TARUMT login credentials to download papers.")
+                            else:
+                                process_single_download(paper, username, password)
 
     elif st.session_state.has_searched and not st.session_state.clear_on_next_run:
         st.warning("No results found.")
