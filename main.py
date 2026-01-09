@@ -4,35 +4,9 @@ import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from requests.auth import HTTPBasicAuth
 import hashlib
-import pandas as pd
-import base64
+import zipfile
+import io
 
-st.set_page_config(page_title="Past Year Fetcher", page_icon="📃")
-
-# Constants
-FACULTIES = [
-    "Faculty of Accountancy, Finance and Business",
-    "Faculty of Applied Sciences",
-    "Faculty of Computing and Information Technology",
-    "Faculty of Built Environment",
-    "Faculty of Engineering and Technology",
-    "Faculty of Communication and Creative Industries",
-    "Faculty of Social Science and Humanities",
-    "Centre for Pre-University Studies"
-]
-
-FACULTY_ABBR = {
-    "Faculty of Accountancy, Finance and Business": "FAFB",
-    "Faculty of Applied Sciences": "FOAS",
-    "Faculty of Computing and Information Technology": "FOCS",
-    "Faculty of Built Environment": "FOBE",
-    "Faculty of Engineering and Technology": "FOET",
-    "Faculty of Communication and Creative Industries": "FCCI",
-    "Faculty of Social Science and Humanities": "FSSH",
-    "Centre for Pre-University Studies": "Foundation"
-}
-
-# Session state keys
 SESSION_KEYS = {
     "past_year_title": "",
     "selected_faculty": "All",
@@ -45,218 +19,29 @@ SESSION_KEYS = {
     "dialog_shown": False
 }
 
+FACULTY_ABBR = {
+    "Faculty of Accountancy, Finance and Business": "FAFB",
+    "Faculty of Applied Sciences": "FOAS",
+    "Faculty of Computing and Information Technology": "FOCS",
+    "Faculty of Built Environment": "FOBE",
+    "Faculty of Engineering and Technology": "FOET",
+    "Faculty of Communication and Creative Industries": "FCCI",
+    "Faculty of Social Science and Humanities": "FSSH",
+    "Centre for Pre-University Studies": "Foundation"
+}
 
-
-
-def create_error_message(paper_title, error_type):
-    """Create standardized error messages for PDF download failures."""
-    error_messages = {
-        'unauthorized': f"Invalid credentials",
-        'not_found': f"PDF not found for {paper_title}",
-        'access_failed': f"Failed to access {paper_title}",
-        'download_failed': f"Download failed for {paper_title}"
-    }
-    return error_messages.get(error_type, f"Unknown error for {paper_title}")
-
-
-def generate_download_script(b64_content, safe_filename, delay_ms):
-    """Generate JavaScript for automatic PDF download."""
-    return f"""
-    <script>
-    // Hide this iframe immediately
-    if (window.frameElement) {{
-        window.frameElement.style.cssText = 'position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;border:none!important;';
-        if (window.frameElement.parentElement) {{
-            window.frameElement.parentElement.style.cssText = 'position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;';
-        }}
-    }}
-    
-    setTimeout(function() {{
-        try {{
-            const data = atob('{b64_content}');
-            const bytes = new Uint8Array(data.length);
-            for (let i = 0; i < data.length; i++) {{
-                bytes[i] = data.charCodeAt(i);
-            }}
-            const blob = new Blob([bytes], {{type: 'application/pdf'}});
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = '{safe_filename}';
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            
-            // Try to hide parent iframe after download
-            setTimeout(() => {{
-                try {{
-                    if (window.parent && window.parent.document) {{
-                        const iframes = window.parent.document.querySelectorAll('div[data-testid="stIFrame"]');
-                        iframes.forEach(container => {{
-                            container.style.cssText = 'position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;';
-                        }});
-                    }}
-                }} catch(e) {{
-                    // Ignore cross-origin errors
-                }}
-            }}, 200);
-            
-        }} catch(e) {{
-            console.error('Download failed:', e);
-        }}
-    }}, {delay_ms});
-    </script>
-    """
-
-
+@st.dialog("Welcome!")
+def disclaimer_dialog():
+    st.markdown("This is a personal project and is not affiliated with TAR UMT in any way. Use at your own risk.")
+    st.markdown("This project does not store any of your credentials or data. All data is fetched directly from TAR UMT's ePrints system.")
+    st.markdown("You can check the source code [here](https://github.com/tzhenyu/PastYearFetcher/blob/main/pastyearfetcher.py).")
+    st.markdown("Made by [tzhenyu](https://github.com/tzhenyu)")
+   
 def initialize_session_state():
     """Initialize all session state variables."""
     for key, default in SESSION_KEYS.items():
         if key not in st.session_state:
             st.session_state[key] = default
-
-
-def apply_custom_styles():
-    """Apply custom CSS styles for mobile responsiveness and UI improvements."""
-    st.markdown("""
-        <style>
-            /* Reduce font size for mobile */
-            @media (max-width: 740px) {
-                /* Reduce padding */
-                .block-container {
-                    padding-top: 2.5rem ;
-                    padding-bottom: 2.5rem ;
-                }
-
-                /* Header font size */
-                h1 {
-                    font-size: 20px !important;}
-
-                /* Standardize all buttons */
-                .stButton button,
-                div[data-testid="stVerticalBlockBorderWrapper"] button {
-                    font-size: 12px !important;
-                    width: 100% !important;
-                    min-height: 32px !important;
-                    box-sizing: border-box !important;
-                }
-
-                div[data-testid="stPopover"] button {
-                    padding: 0.25rem 0.5rem !important;
-                    font-size: 12px !important;
-                    width: 100% !important;
-                    min-height: 32px !important;
-                    box-sizing: border-box !important;
-                }
-
-                /* Ensure button containers have same width */
-                div.element-container {
-                    width: 100% !important;
-                }
-            }
-            
-            /* Toast styling */
-            div[data-testid=stToastContainer] {
-                position: fixed !important;
-                bottom: 10% !important;
-                left: 50% !important;
-                transform: translateX(-50%) !important;
-                display: flex !important;
-                flex-direction: column !important;
-                align-items: center !important;
-            }           
-             
-            [data-testid=stToastContainer] [data-testid=stMarkdownContainer] > p {
-                font-size: 1.5rem;
-                padding: 10px 10px 10px 10px;
-            }
-            
-            /* Mobile toast styling */
-            @media (max-width: 740px) {
-                [data-testid=stToastContainer] [data-testid=stMarkdownContainer] > p {
-                    font-size: 1rem !important;
-                    padding: 8px 12px !important;
-                }
-            }
-            
-            /* Center download buttons in container */
-            div[data-testid="stVerticalBlockBorderWrapper"] .stColumn:last-child div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"] {
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: center !important;
-                min-height: 60px !important;
-            }
-            
-            /* Prevent button state changes - target the correct button */
-            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"] {
-                background-color: #ffffff !important;
-                border: 1px solid #d3d3d3 !important;
-                color: #262730 !important;
-                transition: none !important;
-                transform: none !important;
-                position: relative !important;
-            }
-            
-            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:hover {
-                background-color: #f8f9fa !important;
-                border-color: #d3d3d3 !important;
-                color: #262730 !important;
-                transform: none !important;
-            }
-            
-            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:active,
-            div[data-testid="stVerticalBlockBorderWrapper"] button[data-testid="stBaseButton-secondary"]:focus {
-                background-color: #ffffff !important;
-                border-color: #d3d3d3 !important;
-                color: #262730 !important;
-                box-shadow: none !important;
-                outline: none !important;
-                transform: none !important;
-            }
-
-            
-        </style>
-    """, unsafe_allow_html=True)
-
-
-def clear_session_data():
-    """Clear search results and PDF cache from session state."""
-    st.session_state.past_year_title = ""
-    st.session_state.selected_faculty = "All"
-    st.session_state.search_results = []
-    for key in list(st.session_state.keys()):
-        if key.startswith('pdf_'):
-            del st.session_state[key]
-    st.session_state.clear_on_next_run = False
-
-
-def create_display_dataframe(results):
-    """Create and format DataFrame for display."""
-    df = pd.DataFrame(results)
-    df['faculties_str'] = df['faculties'].apply(lambda x: ', '.join([FACULTY_ABBR.get(f, f) for f in x]))
-    
-    # Reorder and rename columns for display
-    display_df = df[['year', 'month', 'faculties_str']].copy()
-    display_df.columns = ['Year', 'Month', 'Faculties']
-    return display_df
-
-
-def process_single_download(paper, username, password):
-    """Process PDF download for a single paper."""
-    success, content, filename = handle_pdf_actions(paper, username, password)
-    
-    if success:
-        safe_filename = filename.replace("'", "\\'").replace('"', '\\"')
-        b64_content = base64.b64encode(content).decode()
-        download_script = generate_download_script(b64_content, safe_filename, 0)
-        st.components.v1.html(download_script, height=0)
-        st.toast(f"✅ Download Success!")
-    else:
-        st.toast(f"❌ Failed: {filename}")
-
-
 
 def search_paper(past_year_title, selected_faculty):
     query = past_year_title.replace(" ", "+")
@@ -267,6 +52,9 @@ def search_paper(past_year_title, selected_faculty):
     xml_content = response.text
     root = ET.fromstring(xml_content)
     results = []
+
+    faculty_full_names = list(FACULTY_ABBR.keys())
+    
     for child in root.findall(".//channel/item"):
         try:
             title = child.find("title").text.strip().split(" (")[0]            
@@ -274,12 +62,19 @@ def search_paper(past_year_title, selected_faculty):
             description = child.find("description").text.split(".")[0]
             year = description.split(" (")[1].split(")")[0]
             month = description.split(",")[-1].removesuffix(" Examination)")
-            faculties_found = [faculty for faculty in FACULTIES if faculty in description]
+
+            # Find which faculties are mentioned in the description
+            faculties_found = [faculty for faculty in faculty_full_names if faculty in description]
+            
+
             if faculties_found and "Tunku Abdul Rahman" in description:
-                if selected_faculty == "All" or selected_faculty in faculties_found:
+                # Convert full faculty names to abbreviations for display
+                faculty_abbrs = [FACULTY_ABBR[f] for f in faculties_found]
+                
+                if selected_faculty == "All" or selected_faculty in faculty_abbrs:
                     results.append({
                         "title": title,
-                        "faculties": faculties_found,
+                        "faculties": faculty_abbrs, 
                         "link": link,
                         "year": year,
                         "month": month
@@ -288,114 +83,227 @@ def search_paper(past_year_title, selected_faculty):
             continue
     return results
 
-
-def handle_pdf_actions(paper, username, password):
-    """Handle PDF fetch and return content for a paper."""
-    paper_key = f"pdf_{hashlib.md5(paper['link'].encode()).hexdigest()}"
+def list_paper_section(results):
+    username = st.session_state.get('username', '')
+    password = st.session_state.get('password', '')
     
-    if paper_key not in st.session_state:
-        response = requests.get(paper['link'])
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
-            meta_tags = soup.find_all("meta", attrs={"name": "eprints.document_url"})
-            for tag in meta_tags:
-                if tag.has_attr("content"):
-                    pdf_url = tag['content'] + "?download=1"
+    # Initialize pagination state
+    if 'papers_per_page' not in st.session_state:
+        st.session_state.papers_per_page = 6
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = 1
+    
+    if not results:
+        return
+    
+    # Pagination controls at the top
+    total_papers = len(results)
+    total_pages = (total_papers - 1) // st.session_state.papers_per_page + 1
+    
+    # Calculate which papers to show FIRST
+    start_idx = (st.session_state.current_page - 1) * st.session_state.papers_per_page
+    end_idx = min(start_idx + st.session_state.papers_per_page, total_papers)
+    current_page_papers = results[start_idx:end_idx]
+    
+    # Fetch PDFs only for current page
+    if username and password and current_page_papers:
+        uncached = [p for p in current_page_papers if f"pdf_{hashlib.md5(p['link'].encode()).hexdigest()}" not in st.session_state]
+        if uncached:
+            progress_bar = st.progress(0)
+            for idx, paper in enumerate(uncached):
+                pdf_url = get_pdf_url(paper['link'])
+                if pdf_url:
                     pdf_response = requests.get(pdf_url, auth=HTTPBasicAuth(username, password))
                     if pdf_response.status_code == 200:
-                        month = paper['month'].replace(" ", "")
-                        filename = f"{paper['title']}_{paper['year']}_{month}.pdf"
-                        filename = filename.replace(" ", "_")
-                        
-                        st.session_state[paper_key] = {
-                            'content': pdf_response.content,
-                            'filename': filename,
-                            'status': 'success'
-                        }
-                        return True, pdf_response.content, filename
-                    elif pdf_response.status_code == 401:
-                        st.session_state[paper_key] = {'status': 'unauthorized'}
-                        return False, None, create_error_message(paper['title'], 'unauthorized')
-            st.session_state[paper_key] = {'status': 'not_found'}
-            return False, None, create_error_message(paper['title'], 'not_found')
-        else:
-            st.session_state[paper_key] = {'status': 'not_found'}
-            return False, None, create_error_message(paper['title'], 'access_failed')
+                        paper_key = f"pdf_{hashlib.md5(paper['link'].encode()).hexdigest()}"
+                        st.session_state[paper_key] = pdf_response.content
+                progress_bar.progress((idx + 1) / len(uncached))
+            st.rerun()
     
-    # Handle already processed papers
-    data = st.session_state[paper_key]
-    if data.get('status') == 'success':
-        return True, data['content'], data['filename']
-    elif data.get('status') == 'unauthorized':
-        return False, None, create_error_message(paper['title'], 'unauthorized')
-    else:
-        return False, None, create_error_message(paper['title'], 'download_failed')
+    # Callback functions
+    def next_page():
+        if st.session_state.current_page < total_pages:
+            st.session_state.current_page += 1
+    
+    def prev_page():
+        if st.session_state.current_page > 1:
+            st.session_state.current_page -= 1
+    
+    with st.container(border=True):
+        col1, col2, col3 = st.columns([1, 5, 1])
+        with col1:
+            st.button("⬅️ Previous", disabled=st.session_state.current_page == 1, on_click=prev_page, key="prev_top")
+        with col2:
+            st.markdown(f"<center>Page {st.session_state.current_page} of {total_pages} ({total_papers} papers)</center>", unsafe_allow_html=True)
+        with col3:
+            st.button("Next ➡️", disabled=st.session_state.current_page >= total_pages, on_click=next_page, key="next_top")
+        
+    # Display papers for current page
+    for paper in current_page_papers:
+        with st.container(border=True):
+            st.markdown(f"<b>{paper['title']}</b> ", unsafe_allow_html=True)
+            
+            faculties_str = ", ".join(paper['faculties'])
+            
+            st.markdown(f"{paper['year']}{paper['month']} · {faculties_str}", unsafe_allow_html=True)
+            
+            paper_key = f"pdf_{hashlib.md5(paper['link'].encode()).hexdigest()}"
+            filename = f"{paper['title']}_{paper['year']}{paper['month']}"
+            filename = filename.replace(" ", "_")            
+            if paper_key in st.session_state:
+                st.download_button(
+                    label="⬇️",
+                    data=st.session_state[paper_key],
+                    file_name=f"{filename}.pdf",
+                    mime="application/pdf",
+                    key=f"download_{paper['link']}"   
+                )
+            else:
+                st.info("Log In your TAR UMT credentials to get the paper!")
+    
+    # Pagination controls at the bottom
+    with st.container(border=True):
+        col1, col2, col3 = st.columns([1, 5, 1])
+        with col1:
+            st.button("⬅️ Prev", disabled=st.session_state.current_page == 1, on_click=prev_page, key="prev_bottom")
+        with col2:
+            st.markdown(f"<center>Page {st.session_state.current_page} of {total_pages}</center>", unsafe_allow_html=True)
+        with col3:
+            st.button("Next ➡️", disabled=st.session_state.current_page >= total_pages, on_click=next_page, key="next_bottom")
 
-@st.dialog("Welcome!")
-def disclaimer_dialog():
-    st.markdown("This is a personal project and is not affiliated with TAR UMT in any way. Use at your own risk.")
-    st.markdown("This project does not store any of your credentials or data. All data is fetched directly from TAR UMT's ePrints system.")
-    st.markdown("You can check the source code [here](https://github.com/tzhenyu/PastYearFetcher/blob/main/pastyearfetcher.py).")
-    st.markdown("Made by [tzhenyu](https://github.com/tzhenyu)")
-   
+def get_pdf_url(paper_link):
+    """Extract PDF URL from paper page."""
+    response = requests.get(paper_link)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, "html.parser")
+        meta_tags = soup.find_all("meta", attrs={"name": "eprints.document_url"})
+        for tag in meta_tags:
+            if tag.has_attr("content"):
+                return tag['content']
+    return None
+            
+
+def create_batch_zip(results, year_from=None, year_to=None):
+    """Create a ZIP file containing multiple PDFs."""
+    username = st.session_state.get('username', '')
+    password = st.session_state.get('password', '')
+    
+    if not username or not password:
+        st.error("Please login first")
+        return None
+    
+    # Filter by year range if specified
+    if year_from is not None and year_to is not None:
+        filtered_papers = [p for p in results if int(year_from) <= int(p['year']) <= int(year_to)]
+    else:
+        filtered_papers = results
+    
+    if not filtered_papers:
+        st.warning(f"No papers found for year range {year_from} - {year_to}")
+        return None
+    
+    zip_buffer = io.BytesIO()
+    
+    with st.spinner(f"Preparing {len(filtered_papers)} papers..."):
+        progress_bar = st.progress(0)
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for idx, paper in enumerate(filtered_papers):
+                paper_key = f"pdf_{hashlib.md5(paper['link'].encode()).hexdigest()}"
+                
+                # Check if already cached
+                if paper_key not in st.session_state:
+                    pdf_url = get_pdf_url(paper['link'])
+                    if pdf_url:
+                        pdf_response = requests.get(pdf_url, auth=HTTPBasicAuth(username, password))
+                        if pdf_response.status_code == 200:
+                            st.session_state[paper_key] = pdf_response.content
+                
+                # Add to ZIP if we have the content
+                if paper_key in st.session_state:
+                    # Clean filename: replace problematic characters
+                    filename = f"{paper['title']}_{paper['year']}{paper['month']}.pdf"
+                    # Remove path separators and other problematic characters
+                    filename = filename.replace("/", "_").replace("\\", "_").replace(":", "_")
+                    filename = filename.replace(" ", "_")
+                    # Ensure it's just a filename, not a path
+                    filename = filename.split("/")[-1].split("\\")[-1]
+                    
+                    zip_file.writestr(filename, st.session_state[paper_key])
+                
+                progress_bar.progress((idx + 1) / len(filtered_papers))
+    
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
+
+def login_section():
+    with st.container(border=True):
+        st.text("Enter TARUMT credentials for the access")
+        username_input = st.text_input("Username", key="eprints_username")
+        password_input = st.text_input("Password", type="password", key="eprints_password")
+        submit_cred = st.button("Submit")
+        if submit_cred:
+            st.session_state.username = username_input
+            st.session_state.password = password_input
+            st.session_state.cred_saved = True
+            st.success("Credentials Submitted")
+
+def batch_download_section(course, selected_faculty):
+    with st.container(border=True):
+        st.text("Batch Download")
+        
+        # Get unique years from results
+        results = search_paper(course, selected_faculty) if course else []
+        
+        if results:
+            years_asc = sorted(set(p['year'] for p in results), reverse=False)
+            years_desc = sorted(set(p['year'] for p in results), reverse=True)
+            
+            # Year range selection
+            col_from, col_to = st.columns(2)
+            with col_from:
+                year_from = st.selectbox("From", years_asc, key="year_from")
+            with col_to:
+                year_to = st.selectbox("To", years_desc, key="year_to")
+            
+            if st.button("📦 Download Batch"):
+                # Convert years to integers for comparison
+                year_start = int(year_from)
+                year_end = int(year_to)
+                
+                # Ensure start <= end
+                if year_start > year_end:
+                    year_start, year_end = year_end, year_start
+                
+                zip_data = create_batch_zip(results, year_start, year_end)
+                
+                if zip_data:
+                    st.download_button(
+                        label="💾 Download ZIP",
+                        data=zip_data,
+                        file_name=f"papers_{year_start}_to_{year_end}_{course}.zip",
+                        mime="application/zip",
+                        key="batch_download"
+                    )
+        else:
+
+            st.info("Search for papers first")
+
+def clear_search():
+    st.session_state.course_input = ""
+    st.session_state.current_page = 1
 
 def main():
     if "dialog_shown" not in st.session_state:
         disclaimer_dialog()
-        st.session_state.dialog_shown = True
-    
-    st.title("📃 TAR UMT Past Years Fetcher")
-    st.markdown("[Any feedback is welcome!](https://forms.gle/dSaszkRzZ6reoFc88)")
-    
-    # Apply custom CSS styles
-    st.markdown("""
-        <style>
-            /* Hide empty element containers that appear after download */
-            .stElementContainer:empty,
-            div[data-testid="stElementContainer"]:empty {
-                display: none !important;
-            }
-            
-            /* Hide st.components.v1.html containers */
-            iframe[src^="data:text/html"] {
-                position: absolute !important;
-                left: -9999px !important;
-                width: 1px !important;
-                height: 1px !important;
-                opacity: 0 !important;
-                pointer-events: none !important;
-                border: none !important;
-                visibility: hidden !important;
-            }
-            
-            div[data-testid="stIFrame"] {
-                position: absolute !important;
-                left: -9999px !important;
-                width: 1px !important;
-                height: 1px !important;
-                opacity: 0 !important;
-                pointer-events: none !important;
-                visibility: hidden !important;
-                overflow: hidden !important;
-            }
-            
-            /* Additional hiding for iframe containers */
-            div[data-testid="stIFrame"]:has(iframe[src^="data:text/html"]) {
-                display: none !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
+        st.session_state.dialog_shown = True    
 
-    # Initialize session state variables
-    initialize_session_state()
-    username, password = st.session_state.username, st.session_state.password
+    st.set_page_config(page_title="Past Year Fetcher", page_icon="📃", layout="wide")
+    st.title("TAR UMT Past Year Fetcher")
 
-    if st.session_state.clear_on_next_run:
-        clear_session_data()
-
-    col1, col2 = st.columns([4,1])
+    col1, col2, col3 = st.columns([5,1,1], vertical_alignment='bottom')
     with col1:
-        past_year_title = st.text_input("Search course", placeholder="e.g. BACS1013 or Problem Solving", key="past_year_title", on_change=lambda: setattr(st.session_state, 'search_triggered', True))
+        course = st.text_input("Course Name / Course Code", key="course_input")
     with col2:
         selected_faculty = st.selectbox(
             "Filter by Faculty",
@@ -403,91 +311,19 @@ def main():
             key="selected_faculty",
             on_change=lambda: setattr(st.session_state, 'faculty_changed', True)
         )
+    with col3:
+        st.button("Clear", use_container_width=True, on_click=clear_search)
 
-    # Check if search should be triggered by Enter key or faculty change
-    if (hasattr(st.session_state, 'search_triggered') and st.session_state.search_triggered) or \
-       (hasattr(st.session_state, 'faculty_changed') and st.session_state.faculty_changed):
-        if past_year_title != st.session_state.get('last_search_query', '') or selected_faculty != st.session_state.get('last_faculty_filter', ''):
-            st.session_state.has_searched = True
-            if past_year_title:
-                faculty_filter = "All" if selected_faculty == "All" else next(
-                    (k for k, v in FACULTY_ABBR.items() if v == selected_faculty), "All"
-                )
-                st.session_state.search_results = search_paper(past_year_title, faculty_filter)
-                if st.session_state.search_results:
-                    st.toast(f"{len(st.session_state.search_results)} result(s) found.")
-            else:
-                st.session_state.search_results = []
-            st.session_state.last_search_query = past_year_title
-            st.session_state.last_faculty_filter = selected_faculty
-        st.session_state.search_triggered = False
-        if hasattr(st.session_state, 'faculty_changed'):
-            st.session_state.faculty_changed = False
-
-    col_login, col_search, col_clear, col_empty = st.columns([3, 3, 3, 12])
-    with col_search:
-        search_clicked = st.button("Search")
-    with col_clear:
-        clear_clicked = st.button("Clear")
-    with col_login:
-        with st.popover("Login"):
-            st.text("Enter TARUMT credentials for download access.")
-            st.text("This project does not store any credential.")
-            username_input = st.text_input("Username", key="eprints_username")
-            password_input = st.text_input("Password", type="password", key="eprints_password")
-            submit_cred = st.button("Submit")
-            if submit_cred:
-                st.session_state.username = username_input
-                st.session_state.password = password_input
-                st.session_state.cred_saved = True
-                st.success("Credentials saved!")
-
-    if search_clicked:
-        st.session_state.has_searched = True
-        if past_year_title:
-            faculty_filter = "All" if selected_faculty == "All" else next(
-                (k for k, v in FACULTY_ABBR.items() if v == selected_faculty), "All"
-            )
-            st.session_state.search_results = search_paper(past_year_title, faculty_filter)
-            if st.session_state.search_results:
-                st.toast(f"{len(st.session_state.search_results)} result(s) found.")
-        else:
-            st.session_state.search_results = []
-    if clear_clicked:
-        st.session_state.clear_on_next_run = True
-        st.session_state.has_searched = False
-
-    results = st.session_state.search_results
-
-    # --- Results Display ---
-    if results and not st.session_state.clear_on_next_run:
-        # Create formatted DataFrame for display
-        display_df = create_display_dataframe(results)
-        
-        # Display papers with individual download buttons
-        for idx, (_, row) in enumerate(display_df.iterrows()):
-            paper = results[idx]
-            
-            with st.container(border=True):
-                col1, col2 = st.columns([5.5, 1])
-                
-                with col1:
-                    st.markdown(f"<b>{paper['title']}</b> ", unsafe_allow_html=True)
-                    st.markdown(f"{row['Year']} · {row['Month']} · {row['Faculties']}", unsafe_allow_html=True)
-                
-                with col2:
-                    download_key = f"download_{idx}"
-                    if st.button("Download", key=download_key):
-                        if not username or not password:
-                            st.toast("Please enter your TARUMT login credentials to download papers.")
-                        else:
-                            process_single_download(paper, username, password)
-
-    elif st.session_state.has_searched and not st.session_state.clear_on_next_run:
-        st.warning("No results found.")
+    col1, col2 = st.columns([2,3])
+    with col1:
+        login_section()
+        batch_download_section(course, selected_faculty)
+    with col2:
+        results = search_paper(course, selected_faculty) if course else []
+        list_paper_section(results)
 
 if __name__ == "__main__":
     main()
+    initialize_session_state()
+
     print('Reloaded! All good!')
-
-
